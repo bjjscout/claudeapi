@@ -34,18 +34,17 @@ async def generate(req: GenRequest, x_api_key: str = Header(None)):
         text = ""
         model_used = req.model or "default"
         
-        # Build kwargs for query()
-        query_kwargs = {
-            "prompt": req.prompt,
-            "system_prompt": req.system_prompt,
-            "max_turns": 1,
-            "allowed_tools": []
-        }
+        # Create ClaudeAgentOptions with the correct parameters
+        options = ClaudeAgentOptions(
+            system_prompt=req.system_prompt,
+            max_turns=1,
+            allowed_tools=[]
+        )
         
         if req.model:
-            query_kwargs["model"] = req.model
+            options.model = req.model
             
-        async for msg in query(**query_kwargs):
+        async for msg in query(prompt=req.prompt, options=options):
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, TextBlock):
