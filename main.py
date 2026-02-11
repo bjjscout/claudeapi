@@ -37,7 +37,7 @@ async def generate(req: GenRequest, x_api_key: str = Header(None)):
         # Create ClaudeAgentOptions with the correct parameters
         options = ClaudeAgentOptions(
             system_prompt=req.system_prompt,
-            max_turns=5,
+            max_turns=5,  # Changed from 1 to 5 - allows multi-step responses
             allowed_tools=[]
         )
         
