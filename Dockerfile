@@ -1,39 +1,20 @@
-# Use Python base with Node.js support
-FROM python:3.11-slim
+FROM ubuntu:24.04
 
-# Install system dependencies including Node.js
-RUN apt-get update && apt-get install -y \
-    curl \
-    gcc \
-    g++ \
-    make \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Install Node.js 20 for Claude Code CLI
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
+
+# Install Python and build tools
+RUN apt-get install -y python3 python3-pip python3-venv
 
 # Install Claude Code CLI globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Set working directory
+# Create application directory
 WORKDIR /opt/claude-api
 
-# Copy application code
+# Copy your main.py file
 COPY main.py .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn \
-    pydantic \
-    claude-agent-sdk
-
-# Expose the port
-EXPOSE 3001
-
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
-
-# Run the application
-CMD ["python3", "main.py"]
+# Create Python
