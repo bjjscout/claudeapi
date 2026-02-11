@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, ResultMessage, TextBlock
 
 if "ANTHROPIC_API_KEY" in os.environ:
@@ -18,10 +18,15 @@ async def check_key(x_api_key: str = Header(None)):
 async def health():
     return {"status": "running"}
 
+class Message(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
 class GenRequest(BaseModel):
     prompt: str
     system_prompt: Optional[str] = "You are a professional content writer."
     model: Optional[str] = None
+    conversation_history: Optional[List[Message]] = []
 
 class GenResponse(BaseModel):
     result: str
@@ -34,17 +39,29 @@ async def generate(req: GenRequest, x_api_key: str = Header(None)):
         text = ""
         model_used = req.model or "default"
         
+        # Build the full prompt with conversation history
+        full_prompt = ""
+        if req.conversation_history:
+            for msg in req.conversation_history:
+                if msg.role == "user":
+                    full_prompt += f"User: {msg.content}\n\n"
+                elif msg.role == "assistant":
+                    full_prompt += f"Assistant: {msg.content}\n\n"
+        
+        # Add the current prompt
+        full_prompt += f"User: {req.prompt}"
+        
         # Create ClaudeAgentOptions with the correct parameters
         options = ClaudeAgentOptions(
             system_prompt=req.system_prompt,
-            max_turns=5,  # Changed from 1 to 5 - allows multi-step responses
+            max_turns=5,
             allowed_tools=[]
         )
         
         if req.model:
             options.model = req.model
             
-        async for msg in query(prompt=req.prompt, options=options):
+        async for msg in query(prompt=full_prompt, options=options):
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, TextBlock):
