@@ -1,26 +1,39 @@
-FROM python:3.11-alpine
+# Use Python base with Node.js support
+FROM python:3.11-slim
 
-   # Install system dependencies needed for Python packages
-   RUN apk add --no-cache gcc musl-dev linux-headers
+# Install system dependencies including Node.js
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    make \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-   # Set working directory
-   WORKDIR /opt/claude-api
+# Install Claude Code CLI globally
+RUN npm install -g @anthropic-ai/claude-code
 
-   # Copy application code
-   COPY main.py .
+# Set working directory
+WORKDIR /opt/claude-api
 
-   # Install Python dependencies
-   RUN pip install --no-cache-dir \
-       fastapi \
-       uvicorn \
-       pydantic \
-       claude-agent-sdk
+# Copy application code
+COPY main.py .
 
-   # Expose the port the app runs on
-   EXPOSE 3001
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    pydantic \
+    claude-agent-sdk
 
-   # Set environment variables
-   ENV PYTHONUNBUFFERED=1
+# Expose the port
+EXPOSE 3001
 
-   # Run the application
-   CMD ["python3", "main.py"]
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
+
+# Run the application
+CMD ["python3", "main.py"]
