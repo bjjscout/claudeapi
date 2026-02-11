@@ -17,4 +17,16 @@ WORKDIR /opt/claude-api
 # Copy your main.py file
 COPY main.py .
 
-# Create Python
+# Create Python virtual environment and install dependencies
+RUN python3 -m venv venv && \
+    . venv/bin/activate && \
+    pip install --no-cache-dir fastapi uvicorn claude-agent-sdk
+
+# Set environment variables
+ENV PATH="/opt/claude-api/venv/bin:$PATH"
+
+# Expose port
+EXPOSE 3001
+
+# Start the FastAPI server
+CMD ["/opt/claude-api/venv/bin/python3", "main.py"]
