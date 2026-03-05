@@ -1,4 +1,5 @@
 import os
+import asyncio
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from typing import Optional, List
@@ -8,7 +9,13 @@ if "ANTHROPIC_API_KEY" in os.environ:
     del os.environ["ANTHROPIC_API_KEY"]
 
 app = FastAPI(title="Claude Max Personal API")
+
 API_KEY = "jiujitsu2020"
+
+# Limit to 3 concurrent Claude processes at a time (~480MB max vs 2GB+ before)
+# Adjust MAX_CONCURRENT down to 2 if you still see memory pressure
+MAX_CONCURRENT = 3
+_semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
 async def check_key(x_api_key: str = Header(None)):
     if x_api_key != API_KEY:
@@ -35,45 +42,48 @@ class GenResponse(BaseModel):
 @app.post("/generate", response_model=GenResponse)
 async def generate(req: GenRequest, x_api_key: str = Header(None)):
     await check_key(x_api_key)
-    try:
-        text = ""
-        model_used = req.model or "default"
-        
-        # Build the full prompt with conversation history
-        full_prompt = ""
-        if req.conversation_history:
-            for msg in req.conversation_history:
-                if msg.role == "user":
-                    full_prompt += f"User: {msg.content}\n\n"
-                elif msg.role == "assistant":
-                    full_prompt += f"Assistant: {msg.content}\n\n"
-        
-        # Add the current prompt
-        full_prompt += f"User: {req.prompt}"
-        
-        # Create ClaudeAgentOptions with the correct parameters
-        options = ClaudeAgentOptions(
-            system_prompt=req.system_prompt,
-            max_turns=5,
-            allowed_tools=[]
-        )
-        
-        if req.model:
-            options.model = req.model
-            
-        async for msg in query(prompt=full_prompt, options=options):
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        text += block.text
-            elif isinstance(msg, ResultMessage) and hasattr(msg, "result") and msg.result:
-                text = msg.result
-        
-        if not text:
-            raise HTTPException(status_code=500, detail="Empty response")
-        return GenResponse(result=text, model_used=model_used)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    # Build the full prompt with conversation history
+    full_prompt = ""
+    if req.conversation_history:
+        for msg in req.conversation_history:
+            if msg.role == "user":
+                full_prompt += f"User: {msg.content}\n\n"
+            elif msg.role == "assistant":
+                full_prompt += f"Assistant: {msg.content}\n\n"
+    full_prompt += f"User: {req.prompt}"
+
+    options = ClaudeAgentOptions(
+        system_prompt=req.system_prompt,
+        max_turns=5,
+        allowed_tools=[]
+    )
+    if req.model:
+        options.model = req.model
+
+    # Acquire semaphore — waits if MAX_CONCURRENT processes already running
+    async with _semaphore:
+        try:
+            text = ""
+            model_used = req.model or "default"
+
+            async for msg in query(prompt=full_prompt, options=options):
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            text += block.text
+                elif isinstance(msg, ResultMessage) and hasattr(msg, "result") and msg.result:
+                    text = msg.result
+
+            if not text:
+                raise HTTPException(status_code=500, detail="Empty response")
+
+            return GenResponse(result=text, model_used=model_used)
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
