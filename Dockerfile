@@ -1,9 +1,9 @@
 FROM ubuntu:24.04
 
-# Install Node.js 20 for Claude Code CLI
-RUN apt-get update && apt-get install -y curl && \
+# Install Node.js 20 via nvm (more reliable than nodesource)
+RUN apt-get update && apt-get install -y curl ca-certificates && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs
+    apt-get install -y nodejs npm
 
 # Install Python and build tools
 RUN apt-get install -y python3 python3-pip python3-venv
