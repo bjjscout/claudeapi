@@ -14,7 +14,7 @@ API_KEY = "jiujitsu2020"
 
 # Limit to 3 concurrent Claude processes at a time (~480MB max vs 2GB+ before)
 # Adjust MAX_CONCURRENT down to 2 if you still see memory pressure
-MAX_CONCURRENT = 3
+MAX_CONCURRENT = 6
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
 async def check_key(x_api_key: str = Header(None)):
@@ -55,7 +55,7 @@ async def generate(req: GenRequest, x_api_key: str = Header(None)):
 
     options = ClaudeAgentOptions(
         system_prompt=req.system_prompt,
-        max_turns=5,
+        max_turns=10,
         allowed_tools=[]
     )
     if req.model:
