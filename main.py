@@ -4,46 +4,32 @@ from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from typing import Optional, List
 from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, ResultMessage, TextBlock
-
 if "ANTHROPIC_API_KEY" in os.environ:
     del os.environ["ANTHROPIC_API_KEY"]
-
 app = FastAPI(title="Claude Max Personal API")
-
 API_KEY = "jiujitsu2020"
-
-# Limit to 3 concurrent Claude processes at a time (~480MB max vs 2GB+ before)
-# Adjust MAX_CONCURRENT down to 2 if you still see memory pressure
 MAX_CONCURRENT = 6
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-
 async def check_key(x_api_key: str = Header(None)):
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
-
 @app.get("/health")
 async def health():
     return {"status": "running"}
-
 class Message(BaseModel):
-    role: str  # "user" or "assistant"
+    role: str
     content: str
-
 class GenRequest(BaseModel):
     prompt: str
     system_prompt: Optional[str] = "You are a professional content writer."
     model: Optional[str] = None
     conversation_history: Optional[List[Message]] = []
-
 class GenResponse(BaseModel):
     result: str
     model_used: str
-
 @app.post("/generate", response_model=GenResponse)
 async def generate(req: GenRequest, x_api_key: str = Header(None)):
     await check_key(x_api_key)
-
-    # Build the full prompt with conversation history
     full_prompt = ""
     if req.conversation_history:
         for msg in req.conversation_history:
@@ -52,7 +38,6 @@ async def generate(req: GenRequest, x_api_key: str = Header(None)):
             elif msg.role == "assistant":
                 full_prompt += f"Assistant: {msg.content}\n\n"
     full_prompt += f"User: {req.prompt}"
-
     options = ClaudeAgentOptions(
         system_prompt=req.system_prompt,
         max_turns=5,
@@ -60,13 +45,10 @@ async def generate(req: GenRequest, x_api_key: str = Header(None)):
     )
     if req.model:
         options.model = req.model
-
-    # Acquire semaphore — waits if MAX_CONCURRENT processes already running
     async with _semaphore:
         try:
             text = ""
             model_used = req.model or "default"
-
             async for msg in query(prompt=full_prompt, options=options):
                 if isinstance(msg, AssistantMessage):
                     for block in msg.content:
@@ -74,17 +56,15 @@ async def generate(req: GenRequest, x_api_key: str = Header(None)):
                             text += block.text
                 elif isinstance(msg, ResultMessage) and hasattr(msg, "result") and msg.result:
                     text = msg.result
-
             if not text:
                 raise HTTPException(status_code=500, detail="Empty response")
-
+            print(f"PROMPT: {req.prompt}")
+            print(f"RESPONSE: {text}")
             return GenResponse(result=text, model_used=model_used)
-
         except HTTPException:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=3001)
