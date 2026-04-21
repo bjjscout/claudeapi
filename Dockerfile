@@ -20,7 +20,7 @@ COPY main.py .
 # Create Python virtual environment and install dependencies
 RUN python3 -m venv venv && \
     . venv/bin/activate && \
-    pip install --no-cache-dir fastapi uvicorn claude-agent-sdk
+    pip install --no-cache-dir fastapi uvicorn claude-agent-sdk httpx
 
 # Set environment variables
 ENV PATH="/opt/claude-api/venv/bin:$PATH"
